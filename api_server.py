@@ -1,22 +1,19 @@
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
-from test_ai_model import AIModel
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import RedirectResponse
+from src.controllers.guide_controller import GuideController
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 app = FastAPI()
+app.include_router(GuideController().router)
 
-@app.post("/api/v1/guide")
-def GetGuide(user_request: str, image_url: str):
-    guide_text: str = ""
-    guide_image_url = ""
-
-    ai_model = AIModel()
-
-    # TODO: 프롬프트 생성 필요
-    prompt = user_request
-
-    # guide_text, guide_image_url = ai_model.request(prompt, image_url)
-    # guide_text, guide_image_url = ai_model.test_request(prompt), image_url
-
-    guide_text, guide_image_url = user_request, image_url
-
-    return {"guideText": f"AI Model Response : [{guide_text}]", "guideImageUrl": f"AI Model Response : [{image_url}]"}
+# 개발 환경에서 Root Path 접속 시, swagger 페이지로 Redirect
+@app.get("/")
+async def root():
+    env = os.getenv("ENVIRONMENT")
+    if(env == "dev"):
+        return RedirectResponse(url="/docs")
+    else:
+        return HTTPException(status_code=404)

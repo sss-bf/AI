@@ -2,14 +2,10 @@ import openai
 import requests
 from PIL import Image
 from io import BytesIO
-from dotenv import load_dotenv
-import os
 
 class AIModel:
-    def __init__(self):
-        load_dotenv()
-        openai_api_key = os.getenv("OPENAI_API_KEY")
-        self.client = openai.OpenAI(api_key = openai_api_key)
+    def __init__(self, api_key):
+        self.client = openai.OpenAI(api_key = api_key)
         self.gpt_model = "gpt-4o"
         self.dalle_model = "dall-e-3"
     
