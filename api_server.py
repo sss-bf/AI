@@ -1,6 +1,7 @@
 from typing import Union
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 
 app = FastAPI()
 
@@ -17,3 +18,8 @@ def GetGuide(query: str, image_url: str):
     # TODO: GPT API Call & result 생성 및 반환
 
     return {"guideText": guide_text, "guideImage": guide_image}
+
+@app.get("/download/{filename}")
+async def download_file(filename: str):
+    file_path = f"./{filename}"
+    return FileResponse(file_path, media_type="image/jpeg", filename=filename)
