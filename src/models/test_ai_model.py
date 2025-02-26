@@ -3,7 +3,7 @@ import requests
 from PIL import Image
 from io import BytesIO
 
-class AIModel:
+class TestAIModel:
     def __init__(self, api_key):
         self.client = openai.OpenAI(api_key = api_key)
         self.gpt_model = "gpt-4o"
@@ -66,7 +66,7 @@ class AIModel:
 
 # NOTE: (for Test)
 if __name__ == "__main__":
-    model = AIModel()
+    model = TestAIModel()
     # guide_text, guide_image_url = model.request("이 사진에 대해 설명해줘", "https://upload.wikimedia.org/wikipedia/commons/4/47/PNG_transparency_demonstration_1.png")
     # print(guide_text, guide_image_url)
     guide_text = model.test_request("안녕하세요")
