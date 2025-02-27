@@ -1,9 +1,11 @@
 from langchain_community.chat_models import ChatOpenAI
 from langchain.schema import SystemMessage, HumanMessage
+import os
 
 class OpenAIModel():
-    def __init__(self, api_key):
-        self.open_ai_model = ChatOpenAI(model = "gpt-4o", temperature = 0.7, openai_api_key = api_key)
+    def __init__(self):
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        self.open_ai_model = ChatOpenAI(model = "gpt-4o", temperature = 0.7, openai_api_key = openai_api_key)
         self.history = ""
 
     # 1. 초기 사진 피드백 생성
