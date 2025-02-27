@@ -1,32 +1,27 @@
 # AI Backend Server
 
-## Setup
+## Dependencies
 
-### 1. Install Python
+- Python 3
+- Fast API
+  - fastapi
+  - "uvicorn[standard]"
+- LangChain
+  - langchain
+  - langchain-community
+  - langchain-openai
+- Python Dotenv
+  - python-dotenv
 
-### 2. install modules of Python
+### Environment
 
-```
-pip3 install fastapi
-pip3 install "uvicorn[standard]"
-pip3 install langchain
-pip3 install langchain
-pip3 install -U langchain-community langchain-openai
-pip3 install python-dotenv
-```
+- Create `.env` using `.env.example` file
+- `ENVIRONMENT` need to set to `publish` when you publish this project
+- If you want to run in development environment, you should set `ENVIRONMENT`to `dev`
 
-### 3. Setup Environment File
+## How to run
 
-- Create `.env` File in this root path. (the same path with api_server.py)
-- write below text. (you must replace the `real api key` to real your api key)
-
-```
-OPENAI_API_KEY=real api key
-```
-
-## How To Run API Server
-
-### Run API Server
+- Run API Server using below command root path in this Repository.
 
 ```
 > uvicorn api_server:app --host 0.0.0.0 --port 9000
