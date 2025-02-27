@@ -217,7 +217,7 @@ class OpenAIModel:
 
     def request_retouching(self, image_url, user_request):
         image_url = self._preprocess_image(image_url)
-        
+
         instruction_text = self._create_product_instruction(image_url, user_request)
         
         background_image_prompt = self._create_background_prompt(image_url, user_request)
@@ -287,6 +287,7 @@ class OpenAIModel:
 
     # 사용자의도와 배경 프롬프트를 입력받아 배경 교체된 이미지(url) 생성
     def _create_image_background_url(self, image_url, background_prompt):
+        x_api_key = os.getenv("X_API_KEY")
         payload = json.dumps({
             "image_url": image_url,
             "image_transform": {
@@ -300,7 +301,7 @@ class OpenAIModel:
         headers = {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'X-API-KEY': 'sk_bb463e61da7043139c11db8365cb3521' # pixiecut api
+            'X-API-KEY': x_api_key # pixiecut api
         }
 
         response = requests.request("POST", self.url, headers=headers, data=payload)
