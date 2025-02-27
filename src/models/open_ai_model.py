@@ -9,6 +9,119 @@ from src.utils.datetime_helper import CurrentDateTime
 from src.utils.image_file_helper import ImageFileHelper
 import json
 
+from io import BytesIO
+import IPython
+import json
+import os
+from PIL import Image
+import requests
+import time
+# from google.colab import output
+import math
+from dotenv import load_dotenv
+
+load_dotenv()
+
+STABILITY_KEY = os.getenv("STABILITY_KEY")
+
+def send_generation_request(
+    host,
+    params,
+    files = None
+):
+    headers = {
+        "Accept": "image/*",
+        "Authorization": f"Bearer {STABILITY_KEY}"
+    }
+
+    if files is None:
+        files = {}
+
+    # Encode parameters
+    image = params.pop("image", None)
+    mask = params.pop("mask", None)
+    if image is not None and image != '':
+        files["image"] = open(image, 'rb')
+    if mask is not None and mask != '':
+        files["mask"] = open(mask, 'rb')
+    if len(files)==0:
+        files["none"] = ''
+
+    # Send request
+    print(f"Sending REST request to {host}...")
+    response = requests.post(
+        host,
+        headers=headers,
+        files=files,
+        data=params
+    )
+    if not response.ok:
+        raise Exception(f"HTTP {response.status_code}: {response.text}")
+
+    return response
+
+def send_async_generation_request(
+    host,
+    params,
+    files = None
+):
+    headers = {
+        "Accept": "application/json",
+        "Authorization": f"Bearer {STABILITY_KEY}"
+    }
+
+    if files is None:
+        files = {}
+
+    # Encode parameters
+    image = params.pop("image", None)
+    mask = params.pop("mask", None)
+    if image is not None and image != '':
+        files["image"] = open(image, 'rb')
+    if mask is not None and mask != '':
+        files["mask"] = open(mask, 'rb')
+    if len(files)==0:
+        files["none"] = ''
+
+    # Send request
+    print(f"Sending REST request to {host}...")
+    response = requests.post(
+        host,
+        headers=headers,
+        files=files,
+        data=params
+    )
+    if not response.ok:
+        raise Exception(f"HTTP {response.status_code}: {response.text}")
+
+    # Process async response
+    response_dict = json.loads(response.text)
+    generation_id = response_dict.get("id", None)
+    assert generation_id is not None, "Expected id in response"
+
+    # Loop until result or timeout
+    timeout = int(os.getenv("WORKER_TIMEOUT", 500))
+    start = time.time()
+    status_code = 202
+    while status_code == 202:
+        print(f"Polling results at https://api.stability.ai/v2beta/results/{generation_id}")
+        response = requests.get(
+            f"https://api.stability.ai/v2beta/results/{generation_id}",
+            headers={
+                **headers,
+                "Accept": "*/*"
+            },
+        )
+
+        if not response.ok:
+            raise Exception(f"HTTP {response.status_code}: {response.text}")
+        status_code = response.status_code
+        time.sleep(10)
+        if time.time() - start > timeout:
+            raise Exception(f"Timeout after {timeout} seconds")
+
+    return response
+
 class OpenAIModel:
     def __init__(self):
         openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -216,12 +329,9 @@ class OpenAIModel:
         return image_url
 
     def request_retouching(self, image_url, user_request):
-        image_url = self._preprocess_image(image_url)
-
         instruction_text = self._create_product_instruction(image_url, user_request)
-        
         background_image_prompt = self._create_background_prompt(image_url, user_request)
-        background_image_url = self._create_image_background_url(image_url, background_image_prompt)
+        background_image_url = self._create_image_background_url_stable(image_url, background_image_prompt)
         return instruction_text, background_image_url
 
     # 상품 소개글 생성
@@ -233,15 +343,15 @@ class OpenAIModel:
             2. Consider the product information provided by {user_request}
             3. Understand the user's intention in {user_request}
             4. Create compelling, concise product copy that:
-                - Highlights the product's key features and benefits
-                - Appeals to the emotional needs of potential buyers
-                - Uses engaging, persuasive language
-                - Is appropriate for social media or secondhand marketplace listings
-                - Creates urgency and desire
+            - Highlights the product's key features and benefits
+            - Appeals to the emotional needs of potential buyers
+            - Uses engaging, persuasive language
+            - Is appropriate for social media or secondhand marketplace listings
+            - Creates urgency and desire
 
             Your copy should be brief yet impactful (50-100 words), include emotive language, and emphasize what makes this product special in korean. Format with attention-grabbing headlines and use short paragraphs or bullet points for readability. Focus on creating text that will make someone stop scrolling and want to buy immediately.
             """
-
+        
         messages = [
             SystemMessage(content="You are a product copywriting specialist for social media and secondhand marketplaces."),
             HumanMessage(content=[
@@ -287,36 +397,197 @@ class OpenAIModel:
 
     # 사용자의도와 배경 프롬프트를 입력받아 배경 교체된 이미지(url) 생성
     def _create_image_background_url(self, image_url, background_prompt):
-        x_api_key = os.getenv("X_API_KEY")
         payload = json.dumps({
-            "image_url": image_url,
-            "image_transform": {
-                "scale": 1,
-                "x_center": 0.5,
-                "y_center": 0.5
-            },
-            "prompt": background_prompt,
-            "negative_prompt": ""
+        "image_url": image_url,
+        "image_transform": {
+            "scale": 1,
+            "x_center": 0.5,
+            "y_center": 0.5
+        },
+        "prompt": background_prompt,
+        "negative_prompt": ""
         })
         headers = {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-API-KEY': x_api_key # pixiecut api
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-API-KEY': 'sk_bb463e61da7043139c11db8365cb3521' # pixiecut api
         }
 
-        response = requests.request("POST", self.url, headers=headers, data=payload)
-        data = json.loads(response.content)
-        result_url = data["result_url"]
+        image_url = requests.request("POST", self.url, headers=headers, data=payload)
 
-        directory = "./result_histories"
-        if not os.path.isdir(directory):
-            os.makedirs(directory)
+        return image_url.text
+
+    def _create_image_background_url_peb(self, image_url, background_prompt):
+
+        import base64
+        import io
+        import time
+
+        import requests
+        from PIL import Image
+
+        print(background_prompt)
+        
+
+        endpoint_url = "https://api.pebblely.com/remove-background/v1/"
+
+        response = requests.post(
+        endpoint_url,
+        headers={
+            "Content-Type": "application/json",
+            "X-Pebblely-Access-Token": "b7064b83-4fea-4fa0-ab4c-0a20eb4306e1",
+        },
+        json={
+            "image": image_url,
+        }
+        )
+        no_bg_image_b64 = response.json()["data"]
+        no_bg_image_encoded = no_bg_image_b64.encode("utf-8")
+        no_bg_image_bytes = io.BytesIO(base64.b64decode(no_bg_image_encoded))
+        no_bg_image = Image.open(no_bg_image_bytes)
+        no_bg_image.save("no_bg_image.png")
+
+        time.sleep(1)
+
+        endpoint_url = "https://api.pebblely.com/create-background/v2/"
+
+        response = requests.post(
+            endpoint_url,
+            headers={
+                "Content-Type": "application/json",
+                "X-Pebblely-Access-Token": "b7064b83-4fea-4fa0-ab4c-0a20eb4306e1",
+            },
+            json={
+                "images": [f"data:image/png;base64,{no_bg_image_b64}"],
+                "theme": "Surprise me",
+                "description": background_prompt,
+                "transforms": [{
+                    "scale_x": 1,
+                    "scale_y": 1,
+                    "x": 0,
+                    "y": 0,
+                    "angle": 0
+                }]
+            }
+        )
+        print(response)
+        # Process Base64 output and save locally 
+        image_b64 = response.json()["data"]
+        image_encoded = image_b64.encode("utf-8")
+        image_bytes = io.BytesIO(base64.b64decode(image_encoded))
+        image = Image.open(image_bytes)
+        image.save("gen_bg_image.jpg")
+
+        return image
+
+    def _create_image_background_url_stable(self, image_url, background_prompt):
 
         imageFileHelper = ImageFileHelper()
-        image_file_path = imageFileHelper.save_image_from_url(result_url)
-        print(image_file_path)
+
+        original_image_file_name = imageFileHelper.save_image_from_url(image_url)
+
+        # TODO: URL -> 이미지 패스로 바꿔야 함.
+        subject_image = original_image_file_name
+
+        # 이미지 로드
+        img = Image.open(subject_image)
+        width, height = img.size
+        total_pixels = width * height
+
+        # 최대 허용 픽셀 수
+        max_pixels = 9437184
+
+        # 크기가 초과되면 조정
+        if total_pixels > max_pixels:
+            scale_factor = math.sqrt(max_pixels / total_pixels)
+            new_width = int(width * scale_factor)
+            new_height = int(height * scale_factor)
+
+            # 이미지 리사이즈
+            img = img.resize((new_width, new_height), Image.LANCZOS)
+
+            # 리사이즈된 이미지 저장
+            resized_path = "/content/resized_subject.jpg"
+            img.save(resized_path)
+
+            # 경로 변경
+            subject_image = resized_path
+
+
+
+        # subject_image = resized_path #{type:"string"}
+        #Use one or both of `background_prompt` string or `background_reference` image
+        background_prompt = "A clear, refreshing summer day at a picnic spot in nature with blue mountains and a crystal-clear lake, where hikers with beads of sweat enjoy cool Torreta beverages in glass bottles, refreshing bubbles rising in the drink with cool water droplets condensing on the bottle surface, sunlight shining through the beverage creating sparkling reflections, atmosphere conveying freshness and rejuvenation" # {type:"string"}
+        background_reference = "" #{type:"string"}
+
+        # Optional inputs:
+        foreground_prompt = "" #{type:"string"}
+        negative_prompt = "" #{type:"string"}
+        preserve_original_subject = 0.6 #{min:0, max:1, step:0.05}
+        original_background_depth =  0.1 #{min:0, max:1, step:0.05}
+        keep_original_background = False #{type:"boolean"}
+
+        #Use `light_source_strength` with a `light_reference` image or a `light_source_direction`
+        light_source_strength = 0.3 #{min:0, max:1, step:0.05}
+        light_reference = "" #{type:"string"}
+        light_source_direction = "none" #["none", "left", "right", "above", "below"]
+
+
+        seed = 0 #{type:"integer"}
+        output_format = "jpeg" #["webp", "jpeg", "png"]
+
+        host = f"https://api.stability.ai/v2beta/stable-image/edit/replace-background-and-relight"
+
+        files = {}
+        files["subject_image"] = open(subject_image, 'rb')
+        if background_reference:
+            files["background_reference"] = open(background_reference, 'rb')
+        if light_reference:
+            files["light_reference"] = open(light_reference, 'rb')
+
+        params = {
+            "output_format": output_format,
+            "background_prompt": background_prompt,
+            "foreground_prompt": foreground_prompt,
+            "negative_prompt": negative_prompt,
+            "preserve_original_subject": preserve_original_subject,
+            "original_background_depth": original_background_depth,
+            "keep_original_background": keep_original_background,
+            "seed": seed
+        }
+        if light_source_direction != "none":
+            params["light_source_direction"] = light_source_direction
+
+        # light_source_strength is only valid when using light_source_direction or light_reference
+        if light_source_direction != "none" or light_reference != '':
+            params["light_source_strength"] = light_source_strength
+
+        response = send_async_generation_request(
+            host,
+            params,
+            files=files
+        )
+
+        # Decode response
+        output_image = response.content
+        finish_reason = response.headers.get("finish-reason")
+        seed = response.headers.get("seed")
+
+        # Check for NSFW classification
+        if finish_reason == 'CONTENT_FILTERED':
+            raise Warning("Generation failed NSFW classifier")
+
+        # Save and display result
+        filename, _ = os.path.splitext(os.path.basename(subject_image))
+        edited = f"edited_{filename}_{seed}.{output_format}"
+        with open(edited, "wb") as f:
+            f.write(output_image)
+        print(f"Saved image {edited}")
+
+        result_image = Image.open(edited)
+
         imgbb_api_key = os.getenv("IMGBB_API_KEY")
-        IMAGE_PATH = image_file_path
+        IMAGE_PATH = edited
         # 🔹 API 요청 URL
         UPLOAD_URL = "https://api.imgbb.com/1/upload"
 
