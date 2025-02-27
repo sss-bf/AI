@@ -12,15 +12,22 @@ class OpenAIModel:
         openai_api_key = os.getenv("OPENAI_API_KEY")
         self.open_ai_model = ChatOpenAI(model = "gpt-4o", temperature = 0.7, openai_api_key = openai_api_key)
         self.history = ""
+        self.last_image_url = ""
 
     def request(self, image_url, user_request):
         guide_text = self._create_guide_text(image_url, user_request)
 
         image_prompt = guide_text
-        if not self._is_request_detail_guide(image_url, user_request):
+        if self._is_request_detail_guide(image_url, user_request):
+            image_prompt = self._create_image_prompt(self.last_image_url, user_request)
+        elif self._is_request_image_guide(image_url, user_request):
+            self.last_image_url = ""
+            image_prompt = self._create_image_prompt(image_url, user_request)
+        else:
             image_prompt = self._create_image_prompt(image_url, user_request)
 
         guide_image_url = self._create_guide_image_url(image_prompt)
+        self.last_image_url = guide_image_url
         return guide_text, guide_image_url
     
     def _create_guide_text(self, image_url, user_request):
@@ -151,7 +158,11 @@ class OpenAIModel:
             input = input
         )
 
-        image_file_path = f"./result_histories/{CurrentDateTime()}.jpg"
+        directory = "./result_histories"
+        if not os.path.isdir(directory):
+            os.makedirs(directory)
+
+        image_file_path = f"{directory}/{CurrentDateTime()}.jpg"
         with open(image_file_path, "wb") as file:
             file.write(output.read())
 
