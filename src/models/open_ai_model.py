@@ -1,4 +1,5 @@
-from langchain_community.chat_models import ChatOpenAI
+# from langchain_community.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain.schema import SystemMessage, HumanMessage
 import os
 import replicate
@@ -14,27 +15,38 @@ class OpenAIModel:
 
     def request(self, image_url, user_request):
         guide_text = self._create_guide_text(image_url, user_request)
-        guide_image_url = self._create_guide_image_url(guide_text)
+
+        image_prompt = guide_text
+        if not self._is_request_detail_guide(image_url, user_request):
+            image_prompt = self._create_image_prompt(image_url, user_request)
+
+        guide_image_url = self._create_guide_image_url(image_prompt)
         return guide_text, guide_image_url
     
     def _create_guide_text(self, image_url, user_request):
         message = self._create_message(image_url, user_request)
         response = self.open_ai_model.invoke(message)
         guide_text = response.content
-        self.history = guide_text
+        if self._is_request_image_guide(image_url, user_request):
+            self.history = ""
+        else:
+            self.history = guide_text
         return guide_text
 
     def _create_message(self, image_url, user_request):
         messages = []
 
         if self._is_request_image_guide(image_url, user_request): # Image와 Text가 모두 있는 경우 : 사진에 의도를 추가하여 가이드 생성
-            messages.append(self._create_image_guide(image_url, user_request))
+            print("Both", bool(image_url), bool(user_request))
+            messages = self._create_image_guide(image_url, user_request)
            
         elif self._is_request_image_feedback(image_url, user_request): # Image만 들어온 경우 : 이전 가이드를 기반으로 현재 이미지의 가이드 생성
-            messages.append(self._create_image_feedback(image_url, user_request))
+            print("Image Only", bool(image_url), bool(user_request))
+            messages = self._create_image_feedback(image_url, user_request)
             
         elif self._is_request_detail_guide(image_url, user_request): # Text만 들어온 경우 : 이전 사진과 이전 가이드를 기반으로 더 세부적인 가이드 생성
-            messages.append(self._create_detail_guide(image_url, user_request))
+            print("Text Only", bool(image_url), bool(user_request))
+            messages = self._create_detail_guide(image_url, user_request)
 
         else: # 둘 다 안들어온 경우
             # TODO: 에러처리
@@ -69,20 +81,6 @@ class OpenAIModel:
 
     def _create_image_feedback(self, image_url, user_request):
         prompt = f"""
-            사용자가 '{user_request}'라고 추가 요청했습니다. \n
-            {self.history}
-            사용자의 질문에 대한 답변을 해주세요.
-            이전에 받은 피드백과 사용자의 추가 요청을 반영하여, 현재 사진에서 어떻게 수정해야할지 구체적으로 알려주세요.\n
-        """
-        
-        messages = [
-            SystemMessage(content="당신은 사진 전문가입니다. 사용자에게 친절한 말투로 알려주세요."),
-            HumanMessage(content=prompt)
-        ]
-        return messages
-
-    def _create_detail_guide(self, image_url, user_request):
-        prompt = f"""
             사용자가 새로운 사진을 업로드했습니다.
             기존 피드백: {self.history}
             새로운 사진이 피드백을 잘 반영했다면 칭찬의 글을 남겨주세요. 백점 만점의 몇 점인지 알려주세요.
@@ -96,10 +94,24 @@ class OpenAIModel:
                 {"type": "image_url", "image_url": {"url": image_url}}
             ])
         ]
-
         return messages
 
-    def _create_guide_image_url(self, user_request):
+    def _create_detail_guide(self, image_url, user_request):
+        prompt = f"""
+            사용자가 '{user_request}'라고 추가 요청했습니다. \n
+            {self.history}
+            사용자의 질문에 대한 답변을 해주세요.
+            이전에 받은 피드백과 사용자의 추가 요청을 반영하여, 현재 사진에서 어떻게 수정해야할지 구체적으로 알려주세요.\n
+        """
+        
+        messages = [
+            SystemMessage(content="당신은 사진 전문가입니다. 사용자에게 친절한 말투로 알려주세요."),
+            HumanMessage(content=prompt)
+        ]
+
+        return messages
+    
+    def _create_image_prompt(self, image_url, user_request):
         prompt = f"""
             Describe the size of the image and the size of the subject within it.
             Provide a highly detailed description of the subject’s clothing, including the top, bottom, and shoes, specifying color, material, and fit.
@@ -113,9 +125,23 @@ class OpenAIModel:
 
             Write a highly detailed description of the entire scene within approximately 1000 characters so that anyone can accurately visualize it.
             """
+        
+        messages = [
+            SystemMessage(content="You are someone who describes photographs. Describe the image so vividly and precisely that even someone who has not seen it can perfectly visualize it in their mind."),
+            HumanMessage(content=[
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": image_url}}
+            ])
+        ]
 
+        response = self.open_ai_model.invoke(messages)
+        image_prompt = response.content
+        self.history = image_prompt
+        return image_prompt
+
+    def _create_guide_image_url(self,  prompt):
         input = {
-            "prompt": prompt,
+            "prompt": f'{prompt}\n 위 내용을 기반으로 3:4 비율의 이미지를 생성해줘.',
             "aspect_ratio": "3:4",
             "prompt_upsampling": True
         }
