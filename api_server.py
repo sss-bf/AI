@@ -4,13 +4,22 @@ from src.controllers.image_controller import ImageController
 from src.controllers.guide_controller import GuideController
 from dotenv import load_dotenv
 import os
-from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 
 # 환경 변수 로딩
 load_dotenv()
 
 # Fast API 앱 시작, Router 등록 (API Controller)
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 특정 도메인만 허용하고 싶다면 ["http://192.168.1.100"]
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(GuideController().router)
 app.include_router(ImageController().router)
 
