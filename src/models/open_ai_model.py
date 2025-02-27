@@ -6,6 +6,7 @@ import replicate
 import requests
 
 from src.utils.datetime_helper import CurrentDateTime
+from src.utils.image_file_helper import ImageFileHelper
 
 class OpenAIModel:
     def __init__(self):
@@ -15,6 +16,9 @@ class OpenAIModel:
         self.last_image_url = ""
 
     def request(self, image_url, user_request):
+        # 이미지 전처리 (리사이즈)
+        image_url = self._preprocess_image(image_url)
+
         guide_text = self._create_guide_text(image_url, user_request)
 
         image_prompt = guide_text
@@ -29,6 +33,29 @@ class OpenAIModel:
         guide_image_url = self._create_guide_image_url(image_prompt)
         self.last_image_url = guide_image_url
         return guide_text, guide_image_url
+    
+    def _preprocess_image(self, image_url):
+        imageFileHelper = ImageFileHelper()
+        image_file_path = imageFileHelper.save_image_from_url(image_url)
+        print(image_file_path)
+        imgbb_api_key = os.getenv("IMGBB_API_KEY")
+        IMAGE_PATH = image_file_path
+        # 🔹 API 요청 URL
+        UPLOAD_URL = "https://api.imgbb.com/1/upload"
+
+        # 🔹 이미지 업로드 요청
+        with open(IMAGE_PATH, "rb") as file:
+            response = requests.post(UPLOAD_URL, data={"key": imgbb_api_key}, files={"image": file})
+
+        # 🔹 응답 결과 확인
+        if response.status_code == 200:
+            result = response.json()
+            image_url = result["data"]["url"]
+            print(f"✅ 이미지 업로드 성공! URL: {image_url}")
+        else:
+            print(f"❌ 업로드 실패! 오류 코드: {response.status_code}, 메시지: {response.text}")
+
+        return image_url
     
     def _create_guide_text(self, image_url, user_request):
         message = self._create_message(image_url, user_request)
@@ -150,7 +177,9 @@ class OpenAIModel:
         input = {
             "prompt": f'{prompt}\n 위 내용을 기반으로 3:4 비율의 이미지를 생성해줘.',
             "aspect_ratio": "3:4",
-            "prompt_upsampling": True
+            "prompt_upsampling": True,
+            "width": 270,
+            "height": 360
         }
 
         output = replicate.run(
