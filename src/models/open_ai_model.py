@@ -517,7 +517,7 @@ class OpenAIModel:
 
         # subject_image = resized_path #{type:"string"}
         #Use one or both of `background_prompt` string or `background_reference` image
-        background_prompt = "A clear, refreshing summer day at a picnic spot in nature with blue mountains and a crystal-clear lake, where hikers with beads of sweat enjoy cool Torreta beverages in glass bottles, refreshing bubbles rising in the drink with cool water droplets condensing on the bottle surface, sunlight shining through the beverage creating sparkling reflections, atmosphere conveying freshness and rejuvenation" # {type:"string"}
+        # background_prompt = "A clear, refreshing summer day at a picnic spot in nature with blue mountains and a crystal-clear lake, where hikers with beads of sweat enjoy cool Torreta beverages in glass bottles, refreshing bubbles rising in the drink with cool water droplets condensing on the bottle surface, sunlight shining through the beverage creating sparkling reflections, atmosphere conveying freshness and rejuvenation" # {type:"string"}
         background_reference = "" #{type:"string"}
 
         # Optional inputs:
