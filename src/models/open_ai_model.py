@@ -132,21 +132,25 @@ class OpenAIModel:
 
     def request_guide(self, image_url, user_request):
         # 이미지 전처리 (리사이즈)
-        image_url = self._preprocess_image(image_url)
-
+        
         guide_text = self._create_guide_text(image_url, user_request)
 
+        guide_image_url = ""
         image_prompt = guide_text
         if self._is_request_detail_guide(image_url, user_request):
-            image_prompt = self._create_image_prompt(self.last_image_url, user_request)
+            # image_prompt = self._create_image_prompt(self.last_image_url, user_request)
+            pass
         elif self._is_request_image_guide(image_url, user_request):
+            image_url = self._preprocess_image(image_url)
             self.last_image_url = ""
             image_prompt = self._create_image_prompt(image_url, user_request)
+            guide_image_url = self._create_guide_image_url(image_prompt)
         else:
-            image_prompt = self._create_image_prompt(image_url, user_request)
+            # image_prompt = self._create_image_prompt(image_url, user_request)
+            # guide_image_url = self._create_guide_image_url(image_prompt)
+            pass
 
-        guide_image_url = self._create_guide_image_url(image_prompt)
-        self.last_image_url = guide_image_url
+        # self.last_image_url = guide_image_url
         return guide_text, guide_image_url
     
     def _preprocess_image(self, image_url):
